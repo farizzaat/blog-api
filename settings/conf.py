@@ -2,7 +2,6 @@ from pathlib import Path
 
 from decouple import Config, RepositoryEnv
 
-
 ENV_FILE = Path(__file__).resolve().parent / ".env"
 config = Config(RepositoryEnv(ENV_FILE))
 
