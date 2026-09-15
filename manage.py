@@ -2,7 +2,6 @@ import os
 
 from decouple import Config, RepositoryEnv
 
-
 ENV_FILE = os.path.join(
     os.path.dirname(__file__),
     "settings",

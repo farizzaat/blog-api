@@ -2,7 +2,6 @@ from pathlib import Path
 
 from .conf import BLOG_DEBUG, BLOG_SECRET_KEY
 
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = BLOG_SECRET_KEY
