@@ -1,2 +1,2 @@
 -r base.txt
-ruff
+faker==33.0.0\

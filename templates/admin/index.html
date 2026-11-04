@@ -1,0 +1,114 @@
+{% extends 'admin/index.html' %}
+{% load i18n %}
+{% load unfold %}
+
+{% block content %}
+<div class="space-y-6 pb-12">
+
+    <!-- 1. Карточки KPI -->
+    {% if kpi %}
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {% for card in kpi %}
+            <div class="bg-white p-5 rounded-lg shadow border border-gray-200 flex items-center justify-between" style="background-color: #ffffff !important; border-color: #e2e8f0 !important;">
+                <div>
+                    <p class="text-sm font-medium" style="color: #475569 !important;">{{ card.title }}</p>
+                    <p class="text-3xl font-extrabold mt-1" style="color: #0f172a !important;">{{ card.metric }}</p>
+                </div>
+                <div class="p-3 rounded-full flex items-center justify-center" style="background-color: #eff6ff !important; color: #2563eb !important;">
+                    <span class="material-symbols-outlined text-2xl">{{ card.icon }}</span>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- 2. График и Прогресс-бары -->
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <!-- Блок графика -->
+        <div class="bg-white p-6 rounded-lg shadow border border-gray-200" style="background-color: #ffffff !important; border-color: #e2e8f0 !important;">
+            <h3 class="text-base font-bold mb-4" style="color: #0f172a !important;">Posts per Category</h3>
+            <canvas id="categoryChart"></canvas>
+        </div>
+
+        <!-- Блок прогресс-баров -->
+        <div class="bg-white p-6 rounded-lg shadow border border-gray-200 flex flex-col justify-between" style="background-color: #ffffff !important; border-color: #e2e8f0 !important;">
+            <h3 class="text-base font-bold mb-4" style="color: #0f172a !important;">Published vs Draft Shares</h3>
+            {% if stats_progress %}
+            <div class="space-y-4">
+                <div>
+                    <div class="flex justify-between text-sm font-semibold mb-1" style="color: #1e293b !important;">
+                        <span>Published ({{ stats_progress.published_count }})</span>
+                        <span>{{ stats_progress.published_pct }}%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                        <div class="bg-green-600 h-2.5 rounded-full" style="width: {{ stats_progress.published_pct }}%"></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="flex justify-between text-sm font-semibold mb-1" style="color: #1e293b !important;">
+                        <span>Drafts ({{ stats_progress.draft_count }})</span>
+                        <span>{{ stats_progress.draft_pct }}%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                        <div class="bg-yellow-500 h-2.5 rounded-full" style="width: {{ stats_progress.draft_pct }}%"></div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 3. Таблица: Топ-5 авторов -->
+    <div class="bg-white shadow rounded-lg p-6 border border-gray-200" style="background-color: #ffffff !important; border-color: #e2e8f0 !important;">
+        <h3 class="text-base font-bold mb-4" style="color: #0f172a !important;">Top 5 Authors by Posts</h3>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead>
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider" style="color: #1e293b !important;">Author</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider" style="color: #1e293b !important;">Email</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider" style="color: #1e293b !important;">Posts Count</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for author in top_authors %}
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold" style="color: #0f172a !important;">
+                            {{ author.first_name }} {{ author.last_name }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" style="color: #334155 !important;">
+                            {{ author.email }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold" style="color: #0f172a !important;">
+                            {{ author.posts_count }}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="3" class="px-6 py-4 text-center text-sm" style="color: #64748b !important;">No authors found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<!-- Подключаем Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const chartData = JSON.parse('{{ posts_per_category_chart|safe }}');
+    const ctx = document.getElementById('categoryChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: chartData,
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+</script>
+{% endblock %}
