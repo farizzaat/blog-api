@@ -1,9 +1,11 @@
 import time
 import random
+from datetime import timedelta
 from typing import Any
 from django.core.management.base import BaseCommand, CommandError
 from django.contrib.auth.hashers import make_password
 from django.utils.text import slugify
+from django.utils import timezone
 from faker import Faker
 
 from apps.blog.models import Category, Tag, Post, Comment
@@ -14,6 +16,11 @@ SEED_PASSWORD = "SecureSeedPassword123!"
 DEFAULT_USERS = 20
 DEFAULT_POSTS = 100
 DEFAULT_COMMENTS = 500
+
+DAYS_HISTORY = 365
+EDITED_PERCENTAGE = 0.3
+MIN_EDIT_DELAY_DAYS = 1
+MAX_EDIT_DELAY_DAYS = 30
 
 CATEGORIES = [
     "Python", "Django", "DevOps", "Databases", 
@@ -40,6 +47,7 @@ class Command(BaseCommand):
     def handle(self, *args: Any, **options: Any) -> None:
         start_time = time.time()
         fake = Faker()
+        now = timezone.now()
 
         users_count: int = options["users"]
         posts_count: int = options["posts"]
@@ -65,14 +73,13 @@ class Command(BaseCommand):
             Post.objects.all().delete()
             Tag.objects.all().delete()
             Category.objects.all().delete()
-            # Удаляем всех, кроме суперпользователей
             User.objects.filter(is_superuser=False).delete()
 
-        # 1. Создание категорий (проверка на существование)
+        # 1. Создание категорий
         created_categories = []
         for cat_name in CATEGORIES:
             cat_slug = slugify(cat_name)
-            category, created = Category.objects.get_or_create(
+            category, _ = Category.objects.get_or_create(
                 slug=cat_slug,
                 defaults={"name": cat_name}
             )
@@ -83,20 +90,18 @@ class Command(BaseCommand):
         created_tags = []
         for tag_name in TAGS:
             tag_slug = slugify(tag_name)
-            tag, created = Tag.objects.get_or_create(
+            tag, _ = Tag.objects.get_or_create(
                 slug=tag_slug,
                 defaults={"name": tag_name}
             )
             created_tags.append(tag)
         self.stdout.write(self.style.SUCCESS(f"Tags: {len(TAGS)} processed"))
 
-        # 3. Создание пользователей с bulk_create и уникальными email
+        # 3. Создание пользователей
         existing_emails = set(User.objects.values_list("email", flat=True))
         users_to_create = []
-        
         hashed_password = make_password(SEED_PASSWORD)
         
-        created_users_counter = 0
         while len(users_to_create) < users_count:
             first_name = fake.first_name()
             last_name = fake.last_name()
@@ -108,7 +113,6 @@ class Command(BaseCommand):
                 counter += 1
             existing_emails.add(email)
 
-            # Распределение: немного staff, часть неактивных
             is_staff = fake.boolean(chance_of_getting_true=10)
             is_active = fake.boolean(chance_of_getting_true=90)
 
@@ -123,6 +127,7 @@ class Command(BaseCommand):
                 )
             )
 
+        created_users_counter = 0
         if users_to_create:
             User.objects.bulk_create(users_to_create)
             created_users_counter = len(users_to_create)
@@ -140,7 +145,6 @@ class Command(BaseCommand):
             author = fake.random_element(all_users)
             title = fake.sentence().rstrip(".")
             
-            # Уникальный slug с суффиксом при совпадении
             base_slug = slugify(title)
             slug = base_slug
             suffix = 1
@@ -149,14 +153,12 @@ class Command(BaseCommand):
                 slug = f"{base_slug}-{suffix}"
             used_slugs.add(slug)
 
-            # Около 70% published, 30% draft
             status = random.choices(
                 [Post.Status.PUBLISHED, Post.Status.DRAFT],
                 weights=[0.7, 0.3],
                 k=1
             )[0]
 
-            # Около 10% без категории
             has_category = fake.boolean(chance_of_getting_true=90)
             category = fake.random_element(created_categories) if (has_category and created_categories) else None
 
@@ -173,12 +175,29 @@ class Command(BaseCommand):
                 )
             )
 
-        created_posts = []
         if posts_to_create:
             Post.objects.bulk_create(posts_to_create)
-            created_posts = list(Post.objects.all().order_by("-id")[:posts_count])
 
-        # Привязка тегов (0-5 случайных тегов через .tags.set)
+        # Вытаскиваем свежесозданные посты из базы, чтобы проставить им реалистичные даты
+        created_posts = list(Post.objects.order_by("-id")[:posts_count])
+
+        # Присваиваем реалистичные created_at и updated_at для постов
+        for post in created_posts:
+            days_ago = random.randint(0, DAYS_HISTORY)
+            seconds_ago = random.randint(0, 86399)
+            post.created_at = now - timedelta(days=days_ago, seconds=seconds_ago)
+            
+            if random.random() < EDITED_PERCENTAGE:
+                edit_delay = random.randint(MIN_EDIT_DELAY_DAYS, MAX_EDIT_DELAY_DAYS)
+                updated = post.created_at + timedelta(days=edit_delay)
+                post.updated_at = min(updated, now)
+            else:
+                post.updated_at = post.created_at
+
+        if created_posts:
+            Post.objects.bulk_update(created_posts, ["created_at", "updated_at"])
+
+        # Привязка тегов
         for post in created_posts:
             if created_tags:
                 selected_tags = fake.random_elements(
@@ -188,7 +207,7 @@ class Command(BaseCommand):
                 )
                 post.tags.set(selected_tags)
 
-        self.stdout.write(self.style.SUCCESS(f"Posts: {len(created_posts)} created"))
+        self.stdout.write(self.style.SUCCESS(f"Posts: {len(created_posts)} created with realistic dates"))
 
         # 5. Создание комментариев (только на опубликованные посты)
         published_posts = [p for p in created_posts if p.status == Post.Status.PUBLISHED]
@@ -211,7 +230,21 @@ class Command(BaseCommand):
             if comments_to_create:
                 Comment.objects.bulk_create(comments_to_create)
 
-        self.stdout.write(self.style.SUCCESS(f"Comments: {len(comments_to_create)} created"))
+            # Получаем комментарии из базы и расставляем им created_at между post.created_at и now
+            # Чтобы не грузить лишний раз все комментарии, возьмем последние добавленные
+            created_comments = list(Comment.objects.select_related("post").order_by("-id")[:comments_count])
+            for comment in created_comments:
+                post_time = comment.post.created_at
+                delta_seconds = int((now - post_time).total_seconds())
+                if delta_seconds > 0:
+                    random_offset = random.randint(0, delta_seconds)
+                    comment.created_at = post_time + timedelta(seconds=random_offset)
+                else:
+                    comment.created_at = post_time
+
+            Comment.objects.bulk_update(created_comments, ["created_at"])
+
+        self.stdout.write(self.style.SUCCESS(f"Comments: {len(comments_to_create)} created with realistic dates"))
 
         elapsed_time = time.time() - start_time
         self.stdout.write(self.style.SUCCESS(f"Done in {elapsed_time:.2f} seconds"))
