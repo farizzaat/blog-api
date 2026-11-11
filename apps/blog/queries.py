@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 from typing import Any
 from django.db.models import (
-    QuerySet, Count, Avg, Min, Max, Q, F, Value, CharField
+    QuerySet, Count, Avg, Min, Max, Q, F, Value, CharField, Case, When, Exists, OuterRef, Subquery
 )
 from django.db.models.functions import Coalesce, Concat, TruncMonth
 from django.utils import timezone

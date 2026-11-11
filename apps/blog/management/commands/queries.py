@@ -11,6 +11,7 @@ from apps.auths.models import User
 # Образцы аргументов для запросов, которым они требуются
 SAMPLE_ARGUMENTS = {
     4: {"slug": Post.objects.first().slug if Post.objects.exists() else "test"},
+    7: {"page": 1},  # <--- Добавили аргумент для query 7
     8: {"word": "django"},
     9: {"domain": "example.com"},
     11: {"slugs": list(Category.objects.values_list("slug", flat=True)[:2])},
@@ -19,7 +20,7 @@ SAMPLE_ARGUMENTS = {
     14: {"start": date(2025, 1, 1), "end": date(2026, 12, 31)},
     15: {"email": User.objects.filter(post__status="published").values_list("email", flat=True).first() or "user@example.com"},
     16: {"tag_slug": Tag.objects.first().slug if Tag.objects.exists() else "python"},
-    17: {"category_slug": Category.objects.first().slug if Category.objects.exists() else "django"},
+    17: {"category_slug": Category.objects.first().slug if Category.objects.exists() else "django"},  # <--- Добавили аргумент для query 17
     21: {"first_slug": "python", "second_slug": "django"},
     22: {"text": "django"},
     34: {"min_posts": 1},
